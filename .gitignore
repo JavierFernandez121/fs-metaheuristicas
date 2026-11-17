@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.ipynb_checkpoints/
+.DS_Store
+
+# Datos descargados (se regeneran con data/download.py)
+data/raw/
+
+# Resultados de pruebas rapidas; los definitivos se suben al final con git add -f
+results/*.csv
+results/*.md
+results/histories/*.json
+figures/*.png

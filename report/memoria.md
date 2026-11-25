@@ -15,33 +15,40 @@
 Referencias reales y consultadas (guardar DOI o enlace).
 
 ## 4. Formulacion matematica · A
-# 4.1 Notacion y espacio de busqueda
+# 4.1 Notacion y espacio de busqueda
 Sea D_train = {(a_i, y_i)}, i = 1..m, el conjunto de entrenamiento (70 % de los datos, particion estratificada fija), con a_i en R^n. Una solucion es un vector binario x en {0,1}^n, donde x_j = 1 significa que la variable j entra en el modelo. Se escribe |x| = sum_j x_j para el numero de variables elegidas y se impone la restriccion |x| >= 1 (sin variables no hay modelo).
 El espacio factible tiene 2^n - 1 soluciones: unas 1,07 * 10^9 para Breast Cancer (n = 30) y unas 3,3 * 10^150 para Madelon (n = 500). Enumerarlas es inviable, lo que justifica el uso de metaheuristicas.
-# 4.2 Funcion de evaluacion (enfoque wrapper)
+
+# 4.2 Funcion de evaluacion (enfoque wrapper)
 La calidad de x se mide entrenando un clasificador solo con las columnas j tales que x_j = 1:
 err_CV(x) = 1 - (precision media en validacion cruzada estratificada de 5 particiones)
 Clasificador: k-NN con k = 5, con estandarizacion de variables ajustada dentro de cada particion.
 Las particiones de validacion cruzada son las mismas para todas las soluciones (semilla fija), de modo que err_CV es una funcion determinista de x.
 Solo se usa el conjunto de entrenamiento. La particion de test (30 %) no interviene nunca en la busqueda: se usa unicamente al final para medir la precision del subconjunto elegido.
+
 # 4.3 Version monoobjetivo (GA, BPSO, SA y busqueda tabu)
 min  f(x) = alpha * err_CV(x) + (1 - alpha) * |x| / n      sujeto a |x| >= 1,  x en {0,1}^n
-con alpha = 0,99. Con este valor, bajar un punto porcentual de error (0,01) mejora f en 0,0099, mientras que quitar una variable la mejora solo en 0,01 / n (0,00033 con n = 30; 0,00002 con n = 500). El termino de tamano actua, por tanto, sobre todo como criterio de desempate entre subconjuntos con el mismo error: prioriza la precision y, a igualdad de error, prefiere el subconjunto mas pequeno. 
+con alpha = 0,99. Con este valor, bajar un punto porcentual de error (0,01) mejora f en 0,0099, mientras que quitar una variable la mejora solo en 0,01 / n (0,00033 con n = 30; 0,00002 con n = 500). El termino de tamano actua, por tanto, sobre todo como criterio de desempate entre subconjuntos con el mismo error: prioriza la precision y, a igualdad de error, prefiere el subconjunto mas pequeño. 
+
 # 4.4 Version biobjetivo (NSGA-II)
 min  F(x) = ( err_CV(x), |x| )                              sujeto a |x| >= 1
 Ya no hay un unico optimo: x domina a x' si err_CV(x) <= err_CV(x') y |x| <= |x'|, con al menos una desigualdad estricta. El frente de Pareto es el conjunto de soluciones no dominadas, y muestra el compromiso entre precision y tamano. Para comparar frentes se usa el hipervolumen: el area del plano (error, |x|/n) dominada por el frente respecto al punto de referencia (1, 1). Mayor hipervolumen es mejor.
+
 # 4.5 Caracter del problema
 Es un problema discreto y combinatorio, no convexo, sin gradiente, con una funcion objetivo costosa (cada evaluacion nueva entrena 5 modelos) y con muchas mesetas: subconjuntos vecinos distintos pueden dar exactamente el mismo error. Ademas err_CV es solo una estimacion del error de generalizacion.
+
 # 4.6 Presupuesto y cache
 Todos los metodos reciben el mismo presupuesto B = 3000 evaluaciones. Una evaluacion cuenta cuando se entrena un modelo nuevo; una mascara ya vista sale de la cache y no gasta presupuesto. Esto hace la comparacion justa, pero obliga a proteger los metodos frente a los que convergen y repiten soluciones (ver 5.2).
+
 # 4.7 Sobreajuste de la seleccion
 Como la busqueda minimiza err_CV sobre el mismo entrenamiento miles de veces, el subconjunto elegido tiende a quedar sobreajustado a esas particiones. Por eso se separa un test independiente, y la diferencia entre error CV y error de test se analiza en la discusion.
+
 ## 5. Metodos · A (metaheuristicas) · B (clasicos)
 # 5.1 Marco comun
 Todos los metodos cumplen la misma interfaz run(fitness, rng, **params) -> Result: reciben la funcion objetivo compartida (con cache y presupuesto) y un generador aleatorio con semilla, y devuelven la mejor mascara, su valor y la curva de convergencia. La representacion es una mascara binaria; tras cada operador se repara cualquier mascara vacia activando una variable al azar (restriccion |x| >= 1).
 Salvo en el GA, las soluciones iniciales usan una densidad de unos distinta por individuo, tomada de forma uniforme en [0,02, 0,5] ([0,05, 0,5] en NSGA-II), para cubrir tamanos de subconjunto variados desde el principio; con una densidad fija de 0,5 todos tendrian cerca de n/2 variables. El GA usa por defecto 0,5 (opcion p_init=None para densidad variable; en el ajuste no mejoro).
 
-# 5.2 Proteccion frente a la cache
+# 5.2 Proteccion frente a la cache
 Como las mascaras repetidas no gastan presupuesto, un metodo que converge puede proponer solo soluciones ya vistas y no agotar nunca B. Un guardian (_guard.py) detiene la busqueda tras 3000 evaluaciones consecutivas sin ningun entrenamiento nuevo y devuelve el mejor resultado hasta ese momento. En los experimentos con datos reales no llega a actuar; es una red de seguridad.
 
 # 5.3 Algoritmo genetico (GA)
@@ -58,8 +65,7 @@ mientras quede presupuesto:
 Parametros: pop_size = 30, cruce 0,9, mutacion 1/n, torneo k = 3, elitismo 2, p_init = 0,5.
 Complejidad por generacion: O(pop_size * (n + C_eval)), donde C_eval es el coste de evaluar una mascara (validacion cruzada de un k-NN); C_eval domina.
 Por que: es la metaheuristica poblacional de referencia y la mutacion 1/n cambia de media un bit por hijo, adecuado para busqueda local en {0,1}^n.
-
-# 5.4 PSO binario (BPSO)
+# 5.4 PSO binario (BPSO)
 Idea (Kennedy y Eberhart, 1997): cada particula tiene una mascara x y una velocidad real v por variable; la velocidad se actualiza como en el PSO continuo y la posicion se vuelve a muestrear con una funcion de transferencia sigmoide.
 inicializar particulas, velocidades, pbest y gbest
 mientras quede presupuesto:
@@ -71,7 +77,7 @@ Parametros: n_particles = 30, w = 0,9, c1 = c2 = 1,5, v_max = 4.
 Complejidad por iteracion: O(n_particles * (n + C_eval)).
 Por que: es el metodo de enjambre mas usado en seleccion de variables; limitar v_max evita que la probabilidad llegue a 0 o 1 y mantiene algo de exploracion (sigmoide(4) = 0,982).
 
-# 5.5 Recocido simulado (SA)
+# 5.5 Recocido simulado (SA)
 Idea (Kirkpatrick et al., 1983): un solo candidato que se mueve por vecinos e incluso acepta empeoramientos con probabilidad exp(-delta / T), que decrece al enfriarse T.
 x <- mascara aleatoria
 T0 <- media de |delta f| de 20 vecinos de x     (calibracion automatica; gasta presupuesto)
@@ -96,8 +102,7 @@ mientras quede presupuesto:
 Parametros: n_neighbors = 20, tenure = max(5, round(sqrt(n))) (5 con n = 30; 22 con n = 500), patience = 30, perturbacion 5 %.
 Complejidad por iteracion: O(n_neighbors * C_eval).
 Por que: con n = 500, evaluar los 500 vecinos gastaria el presupuesto en 6 iteraciones, por eso se muestrea una parte; la diversificacion evita estancarse en un optimo local.
-
-# 5.7 NSGA-II
+# 5.7 NSGA-II
 Idea (Deb et al., 2002): algoritmo genetico multiobjetivo que ordena la poblacion por frentes de no dominancia y, dentro de un frente, prefiere las soluciones menos aglomeradas (distancia de crowding).
 P <- pop_size mascaras aleatorias; evaluar (err_CV, |x|)
 mientras quede presupuesto:
@@ -111,7 +116,7 @@ Parametros: pop_size = 40, cruce 0,9, mutacion 1/n.
 Complejidad por generacion: O(M * N^2) para la ordenacion (M = 2 objetivos, N = 2 * pop_size) mas las evaluaciones; la ordenacion se implemento de forma vectorizada.
 Para que la curva de convergencia y el mejor f sean comparables con los demas metodos, cada individuo se evalua tambien con la funcion monoobjetivo (sale de la cache, no gasta presupuesto).
 
-# 5.8 Resumen de parametros finales
+# 5.8 Resumen de parametros finales
 Metodo	Parametros finales
 GA	pop_size = 30, cruce 0,9, mutacion 1/n, torneo 3, elitismo 2, p_init = 0,5
 BPSO	n_particles = 30, w = 0,9, c1 = c2 = 1,5, v_max = 4
@@ -119,7 +124,7 @@ SA	T0 calibrada, cooling = 0,95, iters_per_temp = 20, k_max = 5
 Tabu	n_neighbors = 20, tenure = max(5, round(sqrt(n))), patience = 30, perturbacion 5 %
 NSGA-II	pop_size = 40, cruce 0,9, mutacion 1/n
 
-# 5.9 Ajuste de parametros
+# 5.9 Ajuste de parametros
 Protocolo. Solo con el 70 % de entrenamiento de Breast Cancer (398 muestras, 30 variables), presupuesto 3000 y 5 semillas por configuracion (3 en BPSO). Se partio de la configuracion inicial y se vario un parametro cada vez (script herramientas_a/ajuste_parametros.py). Se decidio cambiar un valor solo si la mejora de f superaba unas dos veces el error estandar de la media; si no, se considero ruido. El test no se uso.
 Resultados (media de f, menor es mejor; entre parentesis, error estandar):
 Metodo	Configuracion inicial	Cambio probado	Resultado	Decision

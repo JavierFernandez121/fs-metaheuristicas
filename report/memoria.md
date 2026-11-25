@@ -14,7 +14,7 @@
 ## 3. Descripcion del problema y estado del arte  ·  A: metaheuristicas y NSGA-II · B: filtros, wrappers y embebidos
 Referencias reales y consultadas (guardar DOI o enlace).
 
-4. Formulacion matematica · A
+## 4. Formulacion matematica · A
 4.1 Notacion y espacio de busqueda
 Sea D_train = {(a_i, y_i)}, i = 1..m, el conjunto de entrenamiento (70 % de los datos, particion estratificada fija), con a_i en R^n. Una solucion es un vector binario x en {0,1}^n, donde x_j = 1 significa que la variable j entra en el modelo. Se escribe |x| = sum_j x_j para el numero de variables elegidas y se impone la restriccion |x| >= 1 (sin variables no hay modelo).
 El espacio factible tiene 2^n - 1 soluciones: unas 1,07 * 10^9 para Breast Cancer (n = 30) y unas 3,3 * 10^150 para Madelon (n = 500). Enumerarlas es inviable, lo que justifica el uso de metaheuristicas.
@@ -36,7 +36,7 @@ Es un problema discreto y combinatorio, no convexo, sin gradiente, con una funci
 Todos los metodos reciben el mismo presupuesto B = 3000 evaluaciones. Una evaluacion cuenta cuando se entrena un modelo nuevo; una mascara ya vista sale de la cache y no gasta presupuesto. Esto hace la comparacion justa, pero obliga a proteger los metodos frente a los que convergen y repiten soluciones (ver 5.2).
 4.7 Sobreajuste de la seleccion
 Como la busqueda minimiza err_CV sobre el mismo entrenamiento miles de veces, el subconjunto elegido tiende a quedar sobreajustado a esas particiones. Por eso se separa un test independiente, y la diferencia entre error CV y error de test se analiza en la discusion.
-5. Metodos · A (metaheuristicas) · B (clasicos)
+## 5. Metodos · A (metaheuristicas) · B (clasicos)
 5.1 Marco comun
 Todos los metodos cumplen la misma interfaz run(fitness, rng, **params) -> Result: reciben la funcion objetivo compartida (con cache y presupuesto) y un generador aleatorio con semilla, y devuelven la mejor mascara, su valor y la curva de convergencia. La representacion es una mascara binaria; tras cada operador se repara cualquier mascara vacia activando una variable al azar (restriccion |x| >= 1).
 Salvo en el GA, las soluciones iniciales usan una densidad de unos distinta por individuo, tomada de forma uniforme en [0,02, 0,5] ([0,05, 0,5] en NSGA-II), para cubrir tamanos de subconjunto variados desde el principio; con una densidad fija de 0,5 todos tendrian cerca de n/2 variables. El GA usa por defecto 0,5 (opcion p_init=None para densidad variable; en el ajuste no mejoro).

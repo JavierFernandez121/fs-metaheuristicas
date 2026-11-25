@@ -6,8 +6,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # para importar fsmeta
 from sklearn.datasets import load_breast_cancer, make_classification
 from fsmeta.fitness import FitnessFunction
-from fsmeta.metaheuristics import METHODS as _ALL
-METHODS = {k: _ALL[k] for k in ("ga","bpso","sa","tabu","nsga2")}
+from fsmeta.metaheuristics import METHODS as _ALL_METHODS
+
+# Solo los metodos de Persona A (el registro del repo incluye tambien 'random' y otros)
+METHODS = {k: _ALL_METHODS[k] for k in ("ga", "bpso", "sa", "tabu", "nsga2")}
 from fsmeta.metaheuristics.nsga2 import dominates, fast_non_dominated_sort, crowding_distance
 
 

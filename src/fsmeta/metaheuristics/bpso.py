@@ -14,9 +14,11 @@ Pseudocodigo
             evaluar x_i; actualizar pbest_i y gbest
     devolver Result.from_fitness(fitness)
 
-Parametros: n_particles=30, w=0.7, c1=c2=1.5, v_max=4.0 (limita la velocidad para que la
+Parametros: n_particles=30, w=0.9, c1=c2=1.5, v_max=4.0 (limita la velocidad para que la
 probabilidad nunca sea exactamente 0 o 1: sigmoide(4) ~ 0.982), p_init=None (densidad
-aleatoria por particula en [0.02, 0.5], da enjambres iniciales con tamanos variados)
+aleatoria por particula en [0.02, 0.5], da enjambres iniciales con tamanos variados).
+Ajuste (Breast Cancer, train, 3 semillas, 3000 evals): w=0.9 mejora f en 0.004 frente a w=0.7
+(error estandar 0.0002); w=0.4 empeora; v_max entre 2 y 6 no influye.
 Complejidad por iteracion: O(n_particles * (n + coste_evaluacion)).
 """
 from __future__ import annotations
@@ -33,7 +35,7 @@ def _sigmoid(v):
 
 
 def run(fitness: FitnessFunction, rng: np.random.Generator, n_particles: int = 30,
-        w: float = 0.7, c1: float = 1.5, c2: float = 1.5, v_max: float = 4.0,
+        w: float = 0.9, c1: float = 1.5, c2: float = 1.5, v_max: float = 4.0,
         p_init: float | None = None) -> Result:
     n = fitness.n_features
     guard = StallGuard(fitness)

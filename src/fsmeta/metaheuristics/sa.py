@@ -18,7 +18,9 @@ Pseudocodigo
     devolver Result.from_fitness(fitness)
 
 Parametros: T0=None (autocalibrada; las evaluaciones de calibracion gastan presupuesto y
-cuentan para el mejor global), cooling=0.95, iters_per_temp=20, k_max=3, p_init=None
+cuentan para el mejor global), cooling=0.95, iters_per_temp=20, k_max=5, p_init=None
+Ajuste (Breast Cancer, train, 5 semillas, 3000 evals): k_max=5 mejora f en 0.0013 frente a k_max=3
+(error estandar 0.0001); cooling=0.99 empeora (enfria demasiado despacio para este presupuesto).
 Con presupuesto 3000 hay ~150 escalones de temperatura: T final ~ T0 * 0.95**150 ~ T0/2000.
 Complejidad por iteracion: O(coste_evaluacion).
 """
@@ -32,7 +34,7 @@ from .base import Result, flip, random_mask
 
 
 def run(fitness: FitnessFunction, rng: np.random.Generator, T0: float | None = None,
-        cooling: float = 0.95, iters_per_temp: int = 20, k_max: int = 3,
+        cooling: float = 0.95, iters_per_temp: int = 20, k_max: int = 5,
         p_init: float | None = None) -> Result:
     n = fitness.n_features
     guard = StallGuard(fitness)

@@ -138,6 +138,16 @@ NSGA-II	0,0112 (0,0004)	todas	0,0111 a 0,0116	ruido; se mantiene
 En tabu, todas las configuraciones alcanzaron el mismo error de validacion cruzada (0,0075); solo cambia, a lo sumo, en una variable.
 Limitaciones. (1) Breast Cancer es un problema facil y muchas configuraciones saturan en el mismo error, por lo que discrimina poco: conviene comprobar los dos cambios adoptados en Madelon. (2) Variar un parametro cada vez no detecta interacciones. (3) BPSO se probo con solo 3 semillas, asi que su error estandar es poco fiable. (4) Con unas 40 configuraciones probadas, alguna mejora limite puede deberse al azar, por eso solo se adoptaron las claramente por encima del ruido.
 
+**Comprobacion en un conjunto sintetico tipo Madelon** (600 muestras, 200 variables: 5 informativas
+y 15 redundantes; 420 de entrenamiento; presupuesto 1500, 3 semillas). BPSO con `w = 0,9` obtiene
+f = 0,1320 (error estandar 0,0047) frente a 0,1417 (0,0035) con `w = 0,7`: la mejora (0,0097) es
+unas dos veces el error estandar, en el limite del criterio, pero con el mismo signo que en
+Breast Cancer. En SA, `k_max = 5` (0,1074; 0,0056) no mejora a `k_max = 3` (0,1056; 0,0023);
+`k_max = 1` es el mejor en valor medio (0,0920) pero con mucha variabilidad (error estandar 0,0105),
+y `cooling = 0,99` vuelve a ser claramente peor (0,1315; 0,0039). Por tanto, `w = 0,9` se
+confirma en ambos conjuntos, mientras que `k_max = 5` solo es claro en Breast Cancer y su efecto
+parece depender del numero de variables.
+
 # 5.10 Validacion de NSGA-II frente a pymoo
 Para validar la implementacion propia se comparo con NSGA2 de pymoo 0.6.2 usando la misma funcion objetivo, el mismo presupuesto (3000) y la misma poblacion (40), con 5 semillas. En ambos casos el frente es el conjunto no dominado de todas las mascaras evaluadas, y la metrica es el hipervolumen normalizado (referencia (1, 1)):
 Semilla	HV propio	HV pymoo	Cociente

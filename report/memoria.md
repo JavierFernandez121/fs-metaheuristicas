@@ -12,7 +12,26 @@
 ## 2. Introduccion y motivacion  ·  Ambos
 
 ## 3. Descripcion del problema y estado del arte  ·  A: metaheuristicas y NSGA-II · B: filtros, wrappers y embebidos
-Referencias reales y consultadas (guardar DOI o enlace).
+# 3.1 El problema de seleccion de variables · B
+Seleccionar variables persigue tres objetivos: mejorar la prediccion, obtener modelos mas rapidos y baratos de usar y entender mejor el proceso que genera los datos (Guyon y Elisseeff, 2003). Los metodos se agrupan en tres familias segun como se relacionan con el modelo: filtros, wrappers y metodos embebidos. Las tres aparecen en este trabajo: la informacion mutua es un filtro, todos los metodos de busqueda (SFS y las metaheuristicas) son wrappers y LASSO es embebido.
+
+# 3.2 Filtros · B
+Un filtro puntua las variables con una medida estadistica calculada solo con los datos, sin entrenar el modelo final, y se queda con las mejores. Son muy rapidos y no dependen del clasificador. La informacion mutua es una de las medidas mas usadas porque detecta cualquier tipo de dependencia, no solo la lineal; Battiti (1994) la propuso para elegir variables de forma voraz teniendo en cuenta tambien la redundancia con las ya elegidas, idea que Peng, Long y Ding (2005) formalizaron con el criterio mRMR (maxima relevancia, minima redundancia). La limitacion de los filtros univariantes es que evaluan cada variable por separado: no ven variables que solo son utiles en combinacion ni el sesgo del clasificador que se usara despues.
+
+# 3.3 Wrappers · B
+Kohavi y John (1997) formalizaron el enfoque wrapper: la seleccion es una busqueda en el espacio de subconjuntos y el propio algoritmo de aprendizaje, usado como caja negra, evalua cada candidato, normalmente con validacion cruzada. Su ventaja es que elige las variables que mejor funcionan con ese clasificador concreto; su inconveniente, el coste, porque cada evaluacion entrena modelos. Las estrategias de busqueda clasicas son voraces: la seleccion secuencial hacia delante (Whitney, 1971) y su version flotante (SFFS), que permite quitar variables ya anadidas (Pudil, Novovicova y Kittler, 1994). Las metaheuristicas son otra forma de recorrer el mismo espacio, con mas capacidad de escapar de optimos locales; Xue et al. (2016) revisan su uso en seleccion de variables (ver 3.x).
+
+# 3.4 Metodos embebidos · B
+En los metodos embebidos la seleccion forma parte del entrenamiento. El ejemplo de referencia es LASSO (Tibshirani, 1996): una penalizacion sobre la suma de los valores absolutos de los coeficientes lleva muchos de ellos exactamente a cero, de modo que el modelo ajustado ya indica que variables se usan. Es mucho mas barato que un wrapper, pero queda ligado a un modelo concreto (lineal, en el caso de LASSO).
+
+# 3.5 Sobreajuste en la seleccion y comparacion rigurosa · B
+Cuando una busqueda intensiva se guia por la estimacion de validacion cruzada, esa estimacion acaba sobreajustada: es optimista y no sirve para comparar metodos de seleccion entre si. Reunanen (2003) lo mostro empiricamente y concluyo que el rendimiento final debe medirse en un conjunto de test independiente; con ese criterio, algunas ventajas atribuidas a busquedas mas exhaustivas frente a otras mas simples desaparecian. Cawley y Talbot (2010) muestran que este sobreajuste en la seleccion de modelos puede ser tan grande como las diferencias entre algoritmos. Por eso este trabajo separa un 30 % de test que la busqueda no ve nunca (4.7) y analiza la diferencia entre error CV y error de test. Para comparar varios metodos se siguen las recomendaciones de Demsar (2006): test de Friedman para todos a la vez y test de rangos con signo de Wilcoxon por pares.
+
+# 3.6 El NIPS 2003 Feature Selection Challenge · B
+Madelon procede de este concurso, en el que se propusieron cinco conjuntos de datos de dominios distintos y se pedia clasificar con el menor numero de variables posible (Guyon et al., 2004). Participaron 78 grupos; las mejores propuestas combinaban filtros, wrappers o metodos embebidos con random forests, metodos de nucleo o redes neuronales. Al ser un problema con variables relevantes conocidas y mucho ruido, sigue siendo un banco de pruebas habitual para metodos de seleccion.
+
+# 3.x Metaheuristicas y NSGA-II · A
+<!-- Lo escribe Persona A -->
 
 ## 4. Formulacion matematica · A
 # 4.1 Notacion y espacio de busqueda
@@ -235,8 +254,64 @@ El entrenamiento es lo unico que ve la busqueda: dentro de el se hace la validac
 No se elimina ni se transforma ninguna variable de antemano, porque seleccionarlas es justamente el problema. El unico preprocesado es la estandarizacion (media 0, desviacion 1), necesaria porque k-NN usa distancias; va dentro del pipeline del clasificador, de modo que en cada pliegue se ajusta solo con los datos de entrenamiento de ese pliegue y no hay fuga de informacion. Ninguno de los dos conjuntos tiene valores ausentes.
 
 ## 8. Experimentacion y resultados  ·  B
-Diseno (presupuesto, semillas, clasificador), metricas, tablas (`results/tables_*.md`),
-figuras (`figures/`), tests estadisticos, frente de Pareto e hipervolumen.
+# 8.1 Diseno experimental
+Cada metodo se ejecuta sobre la particion de entrenamiento de cada conjunto con la funcion objetivo de 4.3 (k-NN con k = 5, validacion cruzada estratificada de 5 particiones, alpha = 0,99) y el mismo presupuesto de B = 3000 evaluaciones. Los metodos estocasticos (GA, BPSO, SA, tabu, NSGA-II, busqueda aleatoria e informacion mutua) se ejecutan con 10 semillas (0 a 9); los deterministas (todas las variables, SFS y LASSO), una vez. De cada ejecucion se guarda:
+- error CV del subconjunto elegido (lo que optimiza la busqueda);
+- precision en test: el k-NN se entrena con todo el entrenamiento y las variables elegidas y se evalua en el 30 % de test, que la busqueda no ha visto (lo que importa);
+- numero de variables, evaluaciones gastadas y tiempo;
+- brecha de sobreajuste: error en test menos error CV.
+Para comparar metodos se usan el test de Friedman (todos a la vez) y el de Wilcoxon por pares con correccion de Holm, emparejando por semilla (Demsar, 2006), sobre dos metricas: el error CV (calidad de la busqueda) y la precision en test (generalizacion). Con 10 semillas, el menor p-valor exacto posible de Wilcoxon es 0,002; tras corregir por 21 comparaciones queda en 0,041, asi que solo se detectan como significativas las diferencias que se repiten en las 10 semillas.
+Todas las tablas salen de results/tables_<dataset>.md y las figuras de figures/, generadas por experiments/make_tables.py y experiments/make_figures.py.
+
+# 8.2 Breast Cancer
+Metodo	Precision test	Error CV	Brecha	Variables	Evaluaciones
+LASSO	0,9649	0,0352	-0,0001	4	13
+GA	0,9632 ± 0,0078	0,0188 ± 0,0013	0,0180 ± 0,0082	12,7 ± 2,7	3000
+NSGA-II	0,9626 ± 0,0063	0,0191 ± 0,0017	0,0183 ± 0,0066	6,1 ± 1,1	3000
+BPSO	0,9614 ± 0,0111	0,0193 ± 0,0012	0,0193 ± 0,0113	13,4 ± 3,3	3000
+Tabu	0,9608 ± 0,0078	0,0178 ± 0,0014	0,0213 ± 0,0072	10,3 ± 2,6	3000
+Info. mutua	0,9591 ± 0,0000	0,0351 ± 0,0000	0,0058 ± 0,0000	30	9
+Todas	0,9591	0,0351	0,0058	30	1
+SA	0,9538 ± 0,0136	0,0188 ± 0,0013	0,0274 ± 0,0129	12,3 ± 2,4	3000
+Aleatoria	0,9520 ± 0,0077	0,0241 ± 0,0013	0,0239 ± 0,0072	12,8 ± 3,0	3000
+SFS	0,9474	0,0226	0,0301	6	189
+(media ± desviacion tipica sobre 10 semillas; NSGA-II: la solucion de menor f de cada ejecucion)
+
+Calidad de la busqueda. Las cinco metaheuristicas bajan el error CV a 0,018-0,019, frente a 0,024 de la busqueda aleatoria con el mismo presupuesto y 0,035 con todas las variables (Friedman: chi2 = 41,7, p = 2·10^-7). Las diferencias con la busqueda aleatoria y con informacion mutua son significativas tras Holm para todas ellas (p_holm = 0,041, el minimo posible); entre metaheuristicas no hay diferencias significativas. La busqueda tabu obtiene el menor error CV medio (0,0178) y la curva de convergencia (figures/convergence_breast_cancer.png) muestra que es tambien la que mas rapido baja: la mediana de tabu alcanza f = 0,0266 a las 150 evaluaciones, valor al que la mediana del GA no llega hasta unas 300. NSGA-II arranca mas despacio pero a partir de unas 600 evaluaciones tiene la mejor mediana de f, empatada al final con tabu (0,0208).
+Generalizacion. En test la imagen cambia: las precisiones quedan entre 0,952 y 0,965 y, aunque Friedman detecta diferencias (chi2 = 13,7, p = 0,033), ningun par es significativo tras la correccion de Holm. LASSO, con solo 4 variables y 13 evaluaciones, obtiene la mejor precision en test (0,965) pese a tener el peor error CV.
+Sobreajuste de la seleccion. Todos los wrappers tienen una brecha positiva de 0,018 a 0,030: el error en test es unas dos veces el error CV que creian haber conseguido. Con todas las variables la brecha es 0,006, y con LASSO, practicamente cero. Es exactamente el efecto descrito por Reunanen (2003): cuanto mas intensamente se optimiza la estimacion CV, mas optimista se vuelve. En Breast Cancer, el problema es tan facil que el margen de mejora real es pequeno (todas las variables ya dan 0,959) y el sobreajuste se come la ventaja de la busqueda (figures/boxplot_breast_cancer.png).
+Tamano del subconjunto. NSGA-II consigue el mismo error CV que el GA con la mitad de variables (6,1 frente a 12,7), porque su segundo objetivo empuja explicitamente hacia subconjuntos pequenos, mientras que en la funcion monoobjetivo el termino de tamano (1 - alpha = 0,01) solo desempata. Su frente (figures/pareto_breast_cancer.png) muestra que con 3 variables ya se baja de un 3 % de error CV y que a partir de 5 la mejora es marginal. El hipervolumen medio del frente final es 0,9445 ± 0,0014; es algo menor que el de la validacion de 5.10 (0,953) porque aqui se calcula sobre el frente de la poblacion final y alli sobre todas las mascaras evaluadas.
+
+# 8.3 Madelon
+Metodo	Precision test	Error CV	Brecha	Variables	Relevantes elegidas (de 20)	Evaluaciones
+SFS	0,8962	0,1022	0,0016	6	6	3000
+NSGA-II	0,8959 ± 0,0131	0,1084 ± 0,0166	-0,0042 ± 0,0085	7,8 ± 3,0	7,4 ± 2,5	3000
+LASSO	0,6641	0,3429	-0,0070	3	3	16
+Info. mutua	0,6294 ± 0,0353	0,3588 ± 0,0367	0,0118 ± 0,0101	14,6 ± 21,7	4,5 ± 2,1	15
+GA	0,5864 ± 0,0170	0,3294 ± 0,0137	0,0842 ± 0,0147	241,8 ± 7,6	18,4 ± 0,8	3000
+Aleatoria	0,5760 ± 0,0123	0,4104 ± 0,0081	0,0135 ± 0,0151	136,2 ± 105,0	10,1 ± 5,9	3000
+BPSO	0,5691 ± 0,0151	0,3815 ± 0,0057	0,0494 ± 0,0176	242,8 ± 12,0	17,1 ± 1,4	3000
+SA	0,5673 ± 0,0207	0,3533 ± 0,0128	0,0794 ± 0,0233	232,7 ± 15,9	16,3 ± 2,2	3000
+Tabu	0,5665 ± 0,0264	0,3626 ± 0,0166	0,0709 ± 0,0165	182,6 ± 45,4	14,2 ± 2,3	3000
+Todas	0,5090	0,4434	0,0476	500	20	1
+(media ± desviacion tipica sobre 10 semillas; las 20 variables relevantes se identifican en el entrenamiento porque son las unicas correladas entre si: su maxima |correlacion| con otra variable es al menos 0,67, y la de las 480 de ruido no pasa de 0,12)
+
+En Madelon los metodos se separan en dos grupos muy distintos:
+NSGA-II y SFS resuelven el problema. Eligen entre 5 y 14 variables, casi todas relevantes (el 96 % en NSGA-II y el 100 % en SFS), y llegan a una precision en test de 0,896, frente a 0,509 con todas las variables (una mejora de 39 puntos). NSGA-II es significativamente mejor que todas las demas metaheuristicas, la busqueda aleatoria y la informacion mutua, tanto en error CV como en precision en test (Wilcoxon con Holm, p_holm = 0,041 en todos los pares). Su brecha de sobreajuste es practicamente nula (-0,004).
+Las cuatro metaheuristicas monoobjetivo fracasan. GA, BPSO, SA y tabu terminan con 180-240 variables: conservan casi todas las relevantes (de 14 a 18 de 20), pero tambien unas 200 de ruido. Su precision en test (0,567-0,586) no es significativamente distinta de la de la busqueda aleatoria, y su brecha es la mayor de todos los metodos (0,05-0,08): con tantas variables de ruido, la validacion cruzada premia combinaciones que no se sostienen en test. Sus curvas de convergencia (figures/convergence_madelon.png) se aplanan pronto en f ≈ 0,33-0,38, mientras que la de NSGA-II sigue bajando hasta 0,10.
+Los metodos rapidos tambien fallan, por motivos conocidos. La informacion mutua (0,629) puntua cada variable por separado, y en Madelon las variables relevantes apenas destacan solas porque la clase depende de combinaciones de ellas (7.1); solo recupera 4,5 relevantes de media, y la mitad de lo que elige es ruido. LASSO (0,664) es lineal y el problema no lo es: elige 3 variables, todas relevantes, pero no puede usar las combinaciones no lineales que las hacen utiles.
+
+Por que fracasan las monoobjetivo. Con alpha = 0,99, quitar una variable de ruido mejora f en (1 - alpha)/n = 0,00002, cifra muy inferior a la variacion del error CV entre subconjuntos vecinos. Partiendo de mascaras con decenas o cientos de variables, el paisaje es una gran meseta: invertir uno o pocos bits casi no cambia el error, porque con k-NN la distancia sigue dominada por los cientos de variables de ruido que quedan. Solo cuando quedan pocas variables de ruido el error cae bruscamente, y las metaheuristicas no llegan a esa zona con 3000 evaluaciones. NSGA-II si llega porque su segundo objetivo empuja de forma explicita hacia subconjuntos pequenos y la distancia de crowding mantiene en la poblacion soluciones de todos los tamanos: los individuos pequenos con variables relevantes sobreviven aunque su error inicial sea alto, y se recombinan entre si. SFS llega porque construye el subconjunto desde el vacio, aunque el presupuesto solo le permite 6 pasos (5.11). Esto apunta a una limitacion de la formulacion monoobjetivo de 4.3 en alta dimension, mas que de los algoritmos: un peso mayor para el termino de tamano o una inicializacion mucho mas dispersa son las alternativas naturales (trabajo futuro).
+
+El frente de Pareto revela la estructura del problema. Agregando los frentes de las 10 semillas (figures/pareto_madelon.png), el error CV medio cae de 0,46 con 1 variable a 0,32 con 3, 0,21 con 4 y 0,13 con 5, y a partir de ahi se estanca (0,12 con 6-7 variables) o empeora ligeramente. El codo esta en 5 variables, justo la dimension intrinseca de Madelon (5 variables informativas; las otras 15 relevantes son combinaciones lineales suyas y no aportan informacion nueva). La precision en test sigue el mismo perfil (0,88-0,89 a partir de 5 variables). El hipervolumen medio es 0,884 ± 0,018, con dos semillas de diez (0 y 6) algo por detras (0,855 y 0,851) por no completar el frente en la zona de 5-6 variables.
+
+Coste. NSGA-II es tambien el mas rapido de los metodos con presupuesto completo (99 s por ejecucion, frente a 160-200 s de las otras metaheuristicas), porque evaluar subconjuntos pequenos es mas barato.
+
+# 8.4 Resumen de resultados
+- En un problema facil y de dimension baja (Breast Cancer) todas las metaheuristicas optimizan mucho mejor que la busqueda aleatoria, pero la ventaja desaparece en test por el sobreajuste de la seleccion; un metodo barato como LASSO generaliza igual o mejor.
+- En un problema dificil y de alta dimension (Madelon), la formulacion importa mas que el algoritmo: la version biobjetivo (NSGA-II) encuentra las variables relevantes y pasa de 0,51 a 0,90 de precision en test, mientras que las cuatro monoobjetivo con alpha = 0,99 no mejoran a la busqueda aleatoria.
+- La brecha entre error CV y error de test crece con el numero de variables elegidas: casi nula para los subconjuntos pequenos de NSGA-II y SFS, de 0,05 a 0,08 para los de 200 variables.
+- El frente de Pareto de NSGA-II recupera la dimension intrinseca de Madelon (5 variables).
 
 ## 9. Discusion  ·  Ambos
 Que metodo funciona mejor, cuando y por que. Sobreajuste (error CV frente a test). Limitaciones.
@@ -247,3 +322,21 @@ Que metodo funciona mejor, cuando y por que. Sobreajuste (error CV frente a test
 A partir de `docs/registro_ia.md`.
 
 ## 12. Referencias y anexos
+# Referencias de Persona B (comprobadas: DOI o enlace)
+Battiti, R. (1994). Using mutual information for selecting features in supervised neural net learning. IEEE Transactions on Neural Networks, 5(4), 537-550. https://doi.org/10.1109/72.298224
+Cawley, G. C. y Talbot, N. L. C. (2010). On over-fitting in model selection and subsequent selection bias in performance evaluation. Journal of Machine Learning Research, 11, 2079-2107. https://www.jmlr.org/papers/v11/cawley10a.html
+Demsar, J. (2006). Statistical comparisons of classifiers over multiple data sets. Journal of Machine Learning Research, 7, 1-30. https://jmlr.org/papers/v7/demsar06a.html
+Guyon, I. (2004). Madelon [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5602H
+Guyon, I. y Elisseeff, A. (2003). An introduction to variable and feature selection. Journal of Machine Learning Research, 3, 1157-1182. https://jmlr.org/papers/v3/guyon03a.html
+Guyon, I., Gunn, S., Ben-Hur, A. y Dror, G. (2004). Result analysis of the NIPS 2003 feature selection challenge. Advances in Neural Information Processing Systems 17. https://proceedings.neurips.cc/paper/2004/hash/5e751896e527c862bf67251a474b3819-Abstract.html
+Kohavi, R. y John, G. H. (1997). Wrappers for feature subset selection. Artificial Intelligence, 97(1-2), 273-324. https://doi.org/10.1016/S0004-3702(97)00043-X
+Peng, H., Long, F. y Ding, C. (2005). Feature selection based on mutual information: criteria of max-dependency, max-relevance, and min-redundancy. IEEE Transactions on Pattern Analysis and Machine Intelligence, 27(8), 1226-1238. https://ieeexplore.ieee.org/document/1453511
+Pudil, P., Novovicova, J. y Kittler, J. (1994). Floating search methods in feature selection. Pattern Recognition Letters, 15(11), 1119-1125. https://doi.org/10.1016/0167-8655(94)90127-9
+Reunanen, J. (2003). Overfitting in making comparisons between variable selection methods. Journal of Machine Learning Research, 3, 1371-1382. https://jmlr.org/papers/v3/reunanen03a.html
+Ross, B. C. (2014). Mutual information between discrete and continuous data sets. PLoS ONE, 9(2), e87357. https://doi.org/10.1371/journal.pone.0087357
+Tibshirani, R. (1996). Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society: Series B, 58(1), 267-288. https://doi.org/10.1111/j.2517-6161.1996.tb02080.x
+Whitney, A. W. (1971). A direct method of nonparametric measurement selection. IEEE Transactions on Computers, C-20(9), 1100-1103. https://doi.org/10.1109/T-C.1971.223410
+Wolberg, W., Mangasarian, O., Street, N. y Street, W. (1993). Breast Cancer Wisconsin (Diagnostic) [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5DW2B
+Xue, B., Zhang, M., Browne, W. N. y Yao, X. (2016). A survey on evolutionary computation approaches to feature selection. IEEE Transactions on Evolutionary Computation, 20(4), 606-626. https://doi.org/10.1109/TEVC.2015.2504420
+# Referencias de Persona A
+<!-- Kennedy y Eberhart (1997), Kirkpatrick et al. (1983), Glover (1986), Deb et al. (2002), pymoo... -->

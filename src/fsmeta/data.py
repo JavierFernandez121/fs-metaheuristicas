@@ -4,7 +4,9 @@ Datasets disponibles:
     - "breast_cancer": 569 muestras, 30 variables. Incluido en scikit-learn (no necesita
       descarga). Se usa para depurar: todo corre en segundos.
     - "madelon": dataset principal (NIPS 2003 Feature Selection Challenge). 500 variables,
-      ~20 relevantes. Se descarga de OpenML la primera vez y se guarda en data/raw/.
+      20 relevantes (5 informativas + 15 combinaciones lineales) y 480 de ruido. Se leen los
+      archivos de UCI si estan en data/raw/ (zip de https://archive.ics.uci.edu/dataset/171/madelon);
+      si no, se descarga de OpenML la primera vez y se guarda en data/raw/.
     - "arcene": alta dimension (~10.000 variables, 200 muestras). Opcional.
 
 La particion de test se hace UNA vez con una semilla fija (SPLIT_SEED) y nunca se usa
@@ -48,11 +50,48 @@ class Problem:
         return self.X_train.shape[1]
 
 
+def _load_uci_nips2003(name: str):
+    """Lee los archivos originales del NIPS 2003 (formato UCI) si estan en data/raw/.
+
+    Acepta el zip descargado de UCI (data/raw/<name>.zip, se descomprime solo) o los archivos
+    <name>_train.data/.labels y <name>_valid.data/.labels en cualquier subcarpeta de data/raw/.
+    Une train + valid (las etiquetas del test oficial no son publicas), igual que OpenML.
+    Devuelve None si no encuentra los archivos."""
+    import zipfile
+
+    if not RAW_DIR.exists():
+        return None
+    for z in RAW_DIR.glob(f"{name}*.zip"):
+        target = RAW_DIR / name
+        if not target.exists():
+            with zipfile.ZipFile(z) as zf:
+                zf.extractall(target)
+            for inner in list(target.rglob("*.zip")):  # el zip de UCI trae otro zip dentro
+                with zipfile.ZipFile(inner) as zf:
+                    zf.extractall(inner.parent)
+
+    def find(fname):
+        hits = sorted(RAW_DIR.rglob(fname))
+        return hits[0] if hits else None
+
+    parts = [(find(f"{name}_{s}.data"), find(f"{name}_{s}.labels")) for s in ("train", "valid")]
+    if any(p is None for pair in parts for p in pair):
+        return None
+    X = np.vstack([np.loadtxt(d) for d, _ in parts])
+    labels = np.concatenate([np.loadtxt(lab) for _, lab in parts])
+    y = (labels > 0).astype(int)  # -1 -> 0, +1 -> 1
+    return X.astype(float), y, [f"x{i}" for i in range(X.shape[1])]
+
+
 def load_dataset(name: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Devuelve X, y (etiquetas 0..k-1) y nombres de variables."""
     if name == "breast_cancer":
         d = load_breast_cancer()
         return d.data.astype(float), d.target.astype(int), list(d.feature_names)
+
+    uci = _load_uci_nips2003(name)
+    if uci is not None:
+        return uci
 
     if name in OPENML_NAMES:
         RAW_DIR.mkdir(parents=True, exist_ok=True)

@@ -158,14 +158,81 @@ Semilla	HV propio	HV pymoo	Cociente
 4	0,9527	0,9542	0,998
 Media	0,9533 (± 0,0009)	0,9544 (± 0,0001)	0,999
 Los frentes son practicamente equivalentes (diferencia media del 0,1 %). La pequena ventaja de pymoo en algunas semillas es compatible con la diferencia de inicializacion: pymoo activa cada bit con probabilidad 0,5 y la implementacion propia usa una densidad variable en [0,05, 0,5].
-# 5.11 Metodos clasicos · B
-<!-- Lo escribe Persona B -->
+# 5.11 Metodos clasicos y lineas base · B
+Para saber si las metaheuristicas aportan algo hay que compararlas con metodos mas sencillos. Se usan cinco referencias, todas con la misma interfaz run(fitness, rng) -> Result y la misma funcion objetivo f(x) de 4.3: cada metodo elige su mejor configuracion con el mismo criterio que las metaheuristicas y el resultado se mide igual (error CV, precision en test y numero de variables).
+
+Todas las variables. La mascara x = (1, ..., 1). Es la referencia trivial: un metodo de seleccion que no la mejore no esta eliminando ruido.
+
+Busqueda aleatoria. Evalua mascaras aleatorias hasta agotar el presupuesto; la densidad de unos se sortea en cada iteracion en [0,02, 0,6] para cubrir tamanos variados. Usa el mismo guardian que las metaheuristicas (5.2). Es la linea base minima: si una metaheuristica no le gana con el mismo presupuesto, no aporta nada.
+
+Seleccion secuencial hacia delante (SFS) (Whitney, 1971). Wrapper voraz: parte del conjunto vacio y en cada paso anade la variable que mas reduce f; para cuando ninguna mejora o cuando se agota el presupuesto.
+S <- vacio; f_S <- infinito
+repetir:
+    para cada j que no esta en S: evaluar f(S + {j})
+    j* <- la de menor f
+    si f(S + {j*}) >= f_S: parar
+    S <- S + {j*};  f_S <- f(S + {j*})
+Se implementa sobre la funcion objetivo comun (no con la clase de scikit-learn) para que gaste el mismo presupuesto y use la misma cache. Coste: el paso k evalua n - k + 1 mascaras, O(n^2) evaluaciones para recorrer el camino completo. Con Madelon (n = 500) el presupuesto de 3000 solo alcanza para seis pasos completos (500 + 499 + ... + 495 = 2985 evaluaciones), asi que SFS no puede pasar de 6 variables: es una limitacion del metodo en alta dimension, no de la implementacion. Ademas sufre el efecto nesting: una variable anadida ya no se puede quitar; los metodos flotantes (Pudil et al., 1994) lo corrigen, pero no se incluyen.
+
+Filtro por informacion mutua (MI) (Battiti, 1994). Puntua cada variable por separado con su informacion mutua con la clase, estimada por vecinos proximos (mutual_info_classif de scikit-learn, basado en Ross, 2014). Ordena las variables y prueba las k primeras para k en {1, 2, 3, 5, 8, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300}; devuelve el k con menor f. Gasta como mucho 15 evaluaciones. Es univariante: no detecta redundancia (dos variables casi iguales puntuan igual de alto) ni interacciones (una variable inutil por si sola puede ser clave junto con otra). El estimador tiene una pequena componente aleatoria, por eso se ejecuta con todas las semillas.
+
+LASSO (Tibshirani, 1996). Metodo embebido: la seleccion ocurre al entrenar. Se usa su version para clasificacion, regresion logistica con penalizacion L1 (solver liblinear), sobre variables estandarizadas. La penalizacion lleva a cero los coeficientes de las variables que no compensan; las que quedan con coeficiente no nulo forman la mascara. Se recorren 20 valores de C en escala logaritmica entre 10^-3 y 10 (C pequeno = mas penalizacion = menos variables) y se devuelve la mascara con menor f. Gasta como mucho 20 evaluaciones. Es lineal: puede fallar cuando la clase depende de las variables de forma no lineal, como en Madelon.
+
+Presupuesto. Busqueda aleatoria y SFS pueden gastar las 3000 evaluaciones; MI y LASSO, como mucho 15 y 20, porque su espacio de busqueda es mucho mas pequeno. Se informa siempre del numero real de evaluaciones de cada metodo para que la diferencia de coste sea explicita. Todas las variables, SFS y LASSO son deterministas y se ejecutan una sola vez.
+
 ## 6. Implementacion  ·  B
-Organizacion del codigo (interfaz comun, funcion objetivo con cache y presupuesto),
-decisiones de diseno y dificultades.
+# 6.1 Organizacion del codigo
+El codigo esta en Python 3 (numpy, scipy, pandas, scikit-learn, matplotlib, joblib) y se organiza en un paquete y unos scripts:
+Modulo	Contenido
+src/fsmeta/data.py	Carga de datasets y particion train/test fija
+src/fsmeta/fitness.py	Funcion objetivo comun: wrapper con k-NN, validacion cruzada, cache y presupuesto
+src/fsmeta/metaheuristics/	GA, BPSO, SA, tabu, NSGA-II, busqueda aleatoria, interfaz comun (base.py) y guardian (_guard.py)
+src/fsmeta/baselines.py	Todas las variables, SFS, informacion mutua y LASSO
+src/fsmeta/stats.py	Friedman, Wilcoxon con correccion de Holm, frente de Pareto e hipervolumen 2D
+experiments/	config.py (toda la configuracion), run_all.py, make_tables.py, make_figures.py
+tests/	Pruebas automaticas (pytest)
+El nucleo de todos los metodos de busqueda es implementacion propia. Las librerias se usan solo para el clasificador (k-NN y regresion logistica de scikit-learn), el estimador de informacion mutua, los tests estadisticos (scipy) y la validacion de NSGA-II (pymoo, 5.10).
+
+# 6.2 Decisiones de diseno
+Una sola funcion objetivo para todos. La clase FitnessFunction concentra todo lo que hace justa la comparacion: el mismo clasificador (estandarizacion + k-NN con k = 5 dentro de un pipeline, de modo que la estandarizacion se ajusta solo con la parte de entrenamiento de cada pliegue), las mismas 5 particiones de validacion cruzada estratificada (semilla fija) y el mismo presupuesto. Cada metodo solo usa dos llamadas: fitness(mask), que devuelve f(x), y fitness.multi(mask), que devuelve (err_CV(x), |x|) para NSGA-II.
+Cache. Cada mascara se guarda comprimida (np.packbits) como clave de un diccionario con su error. Una mascara repetida no se reentrena y no gasta presupuesto. Esto ahorra mucho tiempo en los metodos que convergen, y obliga a usar el guardian de 5.2.
+Presupuesto. n_evals cuenta solo entrenamientos nuevos. Al llegar al presupuesto, la funcion lanza la excepcion BudgetExhausted; cada metodo la captura y devuelve su mejor solucion. Ningun metodo puede pasarse y ninguno tiene que llevar la cuenta por su cuenta.
+Mejor solucion y convergencia. La propia funcion objetivo guarda la mejor mascara vista y la curva [(n_evals, mejor f)], de modo que todas las curvas de convergencia se miden en la misma escala (evaluaciones) y se construyen igual para todos los metodos.
+Reproducibilidad. La particion train/test usa la semilla 42 y las particiones de validacion cruzada la semilla 0; cada ejecucion recibe su propio generador np.random.default_rng(semilla) y ningun metodo usa el azar global de numpy. Con la misma semilla se obtiene exactamente el mismo resultado (lo comprueba una prueba automatica).
+Separacion del test. La particion de test nunca se pasa a la funcion objetivo. Solo run_all.py la usa, al final de cada ejecucion: entrena el clasificador con todo el entrenamiento y las variables elegidas y mide la precision en test.
+
+# 6.3 Flujo de los experimentos
+run_all.py lee config.py (datasets, metodos, semillas, presupuesto, parametros), ejecuta cada par (metodo, semilla) y guarda una fila por ejecucion en results/<dataset>.csv con el error CV, f, la precision en test, el numero de variables, las evaluaciones gastadas, el tiempo y las variables elegidas. La curva de convergencia (y el frente de Pareto en NSGA-II) se guarda en results/histories/. Como las ejecuciones son independientes, se lanzan en paralelo con joblib (opcion --jobs). make_tables.py genera las tablas (media y desviacion tipica) y los tests estadisticos, y make_figures.py las figuras: ninguna cifra de la memoria se escribe a mano.
+
+# 6.4 Pruebas
+tests/test_basics.py comprueba que la particion es fija, que la cache no gasta presupuesto, que ningun metodo se pasa del presupuesto, que todos terminan cuando el espacio de busqueda es mas pequeno que el presupuesto (6 variables, 63 mascaras) y que el frente de Pareto y el hipervolumen coinciden con un ejemplo calculado a mano. tests/test_persona_a.py comprueba los operadores de NSGA-II frente a un calculo por fuerza bruta, que el frente devuelto es no dominado, la reproducibilidad y que los metodos encuentran las variables informativas de un problema sintetico.
+
+# 6.5 Dificultades encontradas
+Bucles infinitos por la cache. Como una mascara repetida no gasta presupuesto, un metodo que solo propone mascaras ya vistas no termina nunca. Pasaba en las metaheuristicas al converger y en la busqueda aleatoria cuando hay menos combinaciones posibles que presupuesto. Se resolvio con un guardian comun (5.2) y una prueba automatica que lo detecta.
+Coste de la evaluacion. Cada evaluacion entrena 5 modelos. En un problema del tamano de Madelon cuesta unos 50 ms, de modo que una ejecucion de 3000 evaluaciones tarda unos minutos y el experimento completo, horas. Se mitigo con la cache, un clasificador barato (k-NN) y la ejecucion en paralelo.
+NSGA-II y la comparabilidad. fitness.multi no actualiza el mejor f ni la curva de convergencia, por lo que NSGA-II evalua tambien f(x) en cada individuo (sale de la cache, sin coste), ver 5.7.
+Cambio de interfaz de scikit-learn. En la version 1.8 el parametro penalty de LogisticRegression pasa a estar obsoleto en favor de l1_ratio; baselines.py elige la sintaxis segun la version instalada para funcionar en ambas.
 
 ## 7. Datos  ·  B
-Origen, licencia, descripcion, preprocesado, particion 70/30 fija.
+# 7.1 Conjuntos utilizados
+Dataset	Muestras	Variables	Clases	Uso	Licencia
+Breast Cancer Wisconsin (Diagnostic)	569	30	212 malignos / 357 benignos	Depuracion y ajuste de parametros	CC BY 4.0
+Madelon	2600 (2000 train + 600 valid)	500	1300 / 1300	Dataset principal	CC BY 4.0
+
+Breast Cancer Wisconsin (Diagnostic) (Wolberg et al., 1993; UCI, doi:10.24432/C5DW2B). Cada muestra describe los nucleos celulares de la imagen de una puncion de una masa mamaria con 30 variables continuas (media, error estandar y peor valor de 10 medidas, como radio, textura o concavidad). Se carga desde scikit-learn (load_breast_cancer), que incluye una copia. Es un problema facil (con todas las variables, k-NN ya acierta en torno al 96 % en test) y pequeno (2^30 subconjuntos), por eso se usa para depurar y ajustar parametros, no para sacar conclusiones.
+
+Madelon (Guyon, 2004; UCI, doi:10.24432/C5602H). Conjunto artificial del NIPS 2003 Feature Selection Challenge (Guyon et al., 2004). Los puntos se agrupan en 32 grupos situados en los vertices de un hipercubo de dimension 5 y etiquetados al azar con +1 o -1; esas 5 dimensiones son las variables informativas. Se anaden 15 combinaciones lineales suyas (20 variables relevantes en total) y 480 variables de ruido sin poder predictivo ("probes"), y se desordenan variables y muestras. Las variables toman valores enteros. Es un caso de prueba ideal: se sabe que solo 20 de las 500 variables sirven, el problema es no lineal y las variables utiles apenas destacan una a una, lo que perjudica a los filtros univariantes y a los modelos lineales.
+
+# 7.2 Origen y particiones
+Las etiquetas del test oficial del NIPS 2003 no son publicas, asi que se usan las particiones etiquetadas (train y valid, 2600 muestras), igual que la version de OpenML (id 1485). data.py lee los archivos originales de UCI si estan en data/raw/ (el zip de la pagina del dataset) y, si no, descarga la version de OpenML. Las etiquetas -1/+1 se pasan a 0/1.
+Cada conjunto se divide una sola vez en 70 % de entrenamiento y 30 % de test, de forma estratificada (misma proporcion de clases en ambas partes) y con semilla fija 42:
+Dataset	Entrenamiento	Test
+Breast Cancer	398 (148 malignos / 250 benignos)	171 (64 / 107)
+Madelon	1820 (910 / 910)	780 (390 / 390)
+El entrenamiento es lo unico que ve la busqueda: dentro de el se hace la validacion cruzada de 5 particiones de la funcion objetivo (4.2). El test solo se usa en la medicion final.
+
+# 7.3 Preprocesado
+No se elimina ni se transforma ninguna variable de antemano, porque seleccionarlas es justamente el problema. El unico preprocesado es la estandarizacion (media 0, desviacion 1), necesaria porque k-NN usa distancias; va dentro del pipeline del clasificador, de modo que en cada pliegue se ajusta solo con los datos de entrenamiento de ese pliegue y no hay fuga de informacion. Ninguno de los dos conjuntos tiene valores ausentes.
 
 ## 8. Experimentacion y resultados  ·  B
 Diseno (presupuesto, semillas, clasificador), metricas, tablas (`results/tables_*.md`),

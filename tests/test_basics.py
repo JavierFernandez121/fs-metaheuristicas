@@ -54,6 +54,17 @@ def test_methods_respect_interface(problem, name):
     assert res.n_evals <= budget
 
 
+@pytest.mark.parametrize("name", ["random", "sfs", "mi", "lasso", "all"])
+def test_baselines_terminate_with_tiny_search_space(name):
+    """Con 6 variables solo hay 63 mascaras: el presupuesto (500) no se puede gastar entero.
+    Los metodos deben terminar igualmente (sin el guardian, random se quedaba en bucle)."""
+    from sklearn.datasets import make_classification
+    X, y = make_classification(n_samples=120, n_features=6, n_informative=3, random_state=0)
+    f = FitnessFunction(X, y, budget=500)
+    res = {**METHODS, **BASELINES}[name](f, np.random.default_rng(0))
+    assert res.n_evals <= 63 and res.best_mask.any()
+
+
 def test_pareto_and_hypervolume():
     pts = np.array([[0.1, 0.5], [0.2, 0.2], [0.3, 0.3], [0.4, 0.1]])
     front = pareto_front(pts)

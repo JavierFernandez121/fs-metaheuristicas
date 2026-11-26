@@ -3,6 +3,7 @@
 Uso:
     python experiments/run_all.py                                  # todo lo de config.py
     python experiments/run_all.py --datasets breast_cancer --methods random mi --seeds 0 1 2 --budget 200
+    python experiments/run_all.py --datasets madelon --jobs 4     # 4 ejecuciones a la vez
 
 Salidas:
     results/<dataset>.csv                  una fila por (metodo, semilla)
@@ -18,6 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -62,12 +64,22 @@ def run_one(problem, method, seed, budget):
     return row, extra
 
 
+def _safe_run(problem, method, seed, budget):
+    """Como run_one, pero devuelve el mensaje si el metodo no esta implementado."""
+    try:
+        return run_one(problem, method, seed, budget)
+    except NotImplementedError as e:
+        return str(e)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--datasets", nargs="+", default=config.DATASETS)
     ap.add_argument("--methods", nargs="+", default=config.METHODS)
     ap.add_argument("--seeds", nargs="+", type=int, default=config.SEEDS)
     ap.add_argument("--budget", type=int, default=config.BUDGET)
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="ejecuciones en paralelo (p. ej. el numero de nucleos; -1 = todos)")
     args = ap.parse_args()
 
     (RESULTS / "histories").mkdir(parents=True, exist_ok=True)
@@ -75,20 +87,21 @@ def main():
         problem = make_problem(ds)
         print(f"== {ds}: {problem.X_train.shape[0]} train, {problem.X_test.shape[0]} test, "
               f"{problem.n_features} variables")
+        tasks = [(m, s) for m in args.methods
+                 for s in (args.seeds[:1] if m in config.DETERMINISTIC else args.seeds)]
+        outputs = Parallel(n_jobs=args.jobs, verbose=0)(
+            delayed(_safe_run)(problem, m, s, args.budget) for m, s in tasks)
         rows = []
-        for method in args.methods:
-            seeds = args.seeds[:1] if method in config.DETERMINISTIC else args.seeds
-            for seed in seeds:
-                try:
-                    row, extra = run_one(problem, method, seed, args.budget)
-                except NotImplementedError as e:
-                    print(f"   [omitido] {method}: {e}")
-                    break
-                rows.append(row)
-                (RESULTS / "histories" / f"{ds}_{method}_{seed}.json").write_text(json.dumps(extra))
-                print(f"   {method:7s} seed={seed:2d}  cv_err={row['cv_error']:.4f}  "
-                      f"test_acc={row['test_acc']:.4f}  k={row['n_selected']:4d}  "
-                      f"evals={row['n_evals']:5d}  {row['time_s']:.1f}s")
+        for (method, seed), out in zip(tasks, outputs):
+            if isinstance(out, str):
+                print(f"   [omitido] {method} seed={seed}: {out}")
+                continue
+            row, extra = out
+            rows.append(row)
+            (RESULTS / "histories" / f"{ds}_{method}_{seed}.json").write_text(json.dumps(extra))
+            print(f"   {method:7s} seed={seed:2d}  cv_err={row['cv_error']:.4f}  "
+                  f"test_acc={row['test_acc']:.4f}  k={row['n_selected']:4d}  "
+                  f"evals={row['n_evals']:5d}  {row['time_s']:.1f}s")
         if rows:
             out = RESULTS / f"{ds}.csv"
             new = pd.DataFrame(rows)

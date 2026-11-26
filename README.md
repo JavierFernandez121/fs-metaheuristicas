@@ -23,7 +23,7 @@ pip install -r requirements.txt
 pytest -q                                              # pruebas (segundos)
 python data/download.py madelon                        # descarga Madelon a data/raw/
 python experiments/run_all.py --datasets breast_cancer --seeds 0 1 2 --budget 200   # prueba rápida
-python experiments/run_all.py                          # experimentos completos (config.py)
+python experiments/run_all.py --jobs 4                 # experimentos completos (config.py), 4 a la vez
 python experiments/make_tables.py                      # results/tables_<dataset>.md
 python experiments/make_figures.py                     # figures/*.png
 ```

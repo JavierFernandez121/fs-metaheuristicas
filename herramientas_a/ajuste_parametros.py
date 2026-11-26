@@ -100,7 +100,7 @@ def main():
     rows = Parallel(n_jobs=a.jobs, verbose=5)(delayed(run_one)(m, lab, p, s, Xtr, ytr, a.budget)
                                               for m, lab, p, s in jobs)
     df = pd.DataFrame(rows)
-    out = ROOT / "herramientas_a" / f"resultados_ajuste_{a.dataset}.csv"
+    out = ROOT / "herramientas_a" / f"resultados_ajuste_{a.dataset}_{'-'.join(a.methods)}.csv"
     df.to_csv(out, index=False)
     print(f"\nTiempo total: {time.time() - t0:.0f}s | CSV: {out}\n")
 

@@ -44,6 +44,7 @@ def run(fitness: FitnessFunction, rng: np.random.Generator, n_neighbors: int = 2
         guard.tick()
         while True:
             it += 1
+            best_before = fitness.best_f  # antes de evaluar: fitness() actualiza best_f al evaluar
             best_j, best_fy = None, np.inf
             for j in rng.choice(n, size=min(n_neighbors, n), replace=False):
                 y = x.copy()
@@ -52,16 +53,15 @@ def run(fitness: FitnessFunction, rng: np.random.Generator, n_neighbors: int = 2
                     continue
                 fy = fitness(y)
                 guard.tick()
-                if tabu_until[j] > it and fy >= fitness.best_f:  # tabu sin aspiracion
+                if tabu_until[j] > it and fy >= best_before:  # tabu sin aspiracion
                     continue
                 if fy < best_fy:
                     best_j, best_fy = int(j), fy
+            if fitness.best_f < best_before:  # algun vecino mejoro el mejor global
+                last_improve = it
             if best_j is not None:
-                before = fitness.best_f
                 x[best_j] = ~x[best_j]
                 tabu_until[best_j] = it + tenure
-                if fitness.best_f < before:
-                    last_improve = it
             if it - last_improve > patience:  # diversificacion
                 idx = rng.choice(n, size=max(2, int(perturb_frac * n)), replace=False)
                 x[idx] = ~x[idx]

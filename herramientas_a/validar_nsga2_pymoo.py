@@ -65,8 +65,9 @@ def run_ours(Xtr, ytr, budget, seed, pop_size):
     from fsmeta.fitness import FitnessFunction
     from fsmeta.metaheuristics import METHODS
     fit = FitnessFunction(Xtr, ytr, budget=budget)
-    METHODS["nsga2"](fit, np.random.default_rng(seed), pop_size=pop_size)
-    return evaluated_front(fit), fit.n_evals
+    r = METHODS["nsga2"](fit, np.random.default_rng(seed), pop_size=pop_size)
+    final = np.array([[e, k] for e, k, _ in r.pareto]) if r.pareto else np.empty((0, 2))
+    return evaluated_front(fit), final, fit.n_evals
 
 
 def run_pymoo(Xtr, ytr, budget, seed, pop_size):
@@ -116,21 +117,25 @@ def main():
     Xtr, ytr = load_train()
     n = Xtr.shape[1]
     print(f"breast_cancer train: {Xtr.shape} | presupuesto {a.budget} | poblacion {a.pop} | {a.seeds} semillas\n")
-    print(f"{'semilla':>7} | {'HV nuestro':>10} {'puntos':>6} | {'HV pymoo':>9} {'puntos':>6} | {'ratio':>6}")
-    hv_o, hv_p = [], []
+    print(f"{'semilla':>7} | {'HV nuestro':>10} {'puntos':>6} | {'HV pymoo':>9} {'puntos':>6} | {'ratio':>6} | {'HV frente final run()':>21}")
+    hv_o, hv_p, hv_f = [], [], []
     for s in range(a.seeds):
         t0 = time.time()
-        Fo, _ = run_ours(Xtr, ytr, a.budget, s, a.pop)
+        Fo, Ff, _ = run_ours(Xtr, ytr, a.budget, s, a.pop)
         ho = hypervolume(Fo, n)
+        hf = hypervolume(Ff, n) if len(Ff) else float("nan")
         hv_o.append(ho)
+        hv_f.append(hf)
         if a.sin_pymoo:
-            print(f"{s:>7} | {ho:10.4f} {len(Fo):6d} | {'-':>9} {'-':>6} | {'-':>6}   ({time.time()-t0:.0f}s)")
+            print(f"{s:>7} | {ho:10.4f} {len(Fo):6d} | {'-':>9} {'-':>6} | {'-':>6} | {hf:21.4f}   ({time.time()-t0:.0f}s)")
             continue
         Fp, _ = run_pymoo(Xtr, ytr, a.budget, s, a.pop)
         hp = hypervolume(Fp, n)
         hv_p.append(hp)
-        print(f"{s:>7} | {ho:10.4f} {len(Fo):6d} | {hp:9.4f} {len(Fp):6d} | {ho/hp:6.3f}   ({time.time()-t0:.0f}s)")
-    print(f"\nHV medio nuestro: {np.mean(hv_o):.4f} +- {np.std(hv_o):.4f}")
+        print(f"{s:>7} | {ho:10.4f} {len(Fo):6d} | {hp:9.4f} {len(Fp):6d} | {ho/hp:6.3f} | {hf:21.4f}   ({time.time()-t0:.0f}s)")
+    print(f"\nHV medio nuestro (todas las mascaras evaluadas): {np.mean(hv_o):.4f} +- {np.std(hv_o):.4f}")
+    print(f"HV medio del frente final que devuelve run()   : {np.nanmean(hv_f):.4f} +- {np.nanstd(hv_f):.4f}"
+          "   <- el que usan los experimentos de la memoria")
     if hv_p:
         print(f"HV medio pymoo  : {np.mean(hv_p):.4f} +- {np.std(hv_p):.4f}")
         print(f"ratio medio     : {np.mean(hv_o) / np.mean(hv_p):.3f}   (~1 = equivalentes; <0.95 = revisar nsga2.py)")

@@ -7,7 +7,16 @@
 > `results/` (generadas por `experiments/`), nunca escritas a mano.
 
 ## 1. Resumen  ·  Ambos (al final)
-(< 300 palabras)
+# Resumen
+
+Este proyecto estudia la selección automática de características como un problema de optimización combinatoria aplicado a la clasificación supervisada. El objetivo es encontrar subconjuntos de variables que permitan obtener una buena capacidad predictiva reduciendo, al mismo tiempo, la dimensionalidad de los datos. Para ello se implementan cinco metaheurísticas: algoritmo genético (GA), optimización por enjambre de partículas binaria (BPSO), recocido simulado (SA), búsqueda tabú y NSGA-II.
+
+Los métodos se evalúan mediante un enfoque wrapper, utilizando un clasificador k-NN y validación cruzada, y se comparan con métodos clásicos de selección de características. Los experimentos se realizan sobre los conjuntos Breast Cancer Wisconsin y Madelon, con una partición independiente de entrenamiento y prueba y un presupuesto común de evaluaciones para los métodos de búsqueda.
+
+Se estudian tanto la calidad predictiva como el número de características seleccionadas, el coste computacional y la capacidad de generalización. Además, se analiza el compromiso entre ambos objetivos mediante el frente de Pareto obtenido por NSGA-II.
+
+Los resultados muestran que el rendimiento depende tanto de la estructura del conjunto de datos como de la formulación del problema. En particular, NSGA-II resulta especialmente adecuado para Madelon, donde permite encontrar subconjuntos pequeños con elevada capacidad predictiva. También se observa que una búsqueda intensiva basada en validación cruzada puede producir sobreajuste durante la selección de variables.
+
 
 ## 2. Introduccion y motivacion  ·  Ambos
 
@@ -343,12 +352,57 @@ Coste. NSGA-II es tambien el mas rapido de los metodos con presupuesto completo 
 - El frente de Pareto de NSGA-II recupera la dimension intrinseca de Madelon (5 variables).
 
 ## 9. Discusion  ·  Ambos
-Que metodo funciona mejor, cuando y por que. Sobreajuste (error CV frente a test). Limitaciones.
+# 9. Discusión
+
+Los experimentos muestran que no existe una metaheurística que sea la mejor en todos los escenarios. El rendimiento depende de la dimensionalidad del conjunto de datos, de la estructura de las variables y de la formulación de la función objetivo.
+
+En Breast Cancer, las cinco metaheurísticas monoobjetivo y NSGA-II consiguen errores de validación cruzada reducidos. Sin embargo, las diferencias de precisión en test entre los métodos estocásticos no resultan significativas después de aplicar la corrección de Holm. Esto indica que una mejora durante la búsqueda no implica necesariamente una mejora equivalente en datos no utilizados durante la optimización.
+
+La brecha entre el error de validación cruzada y el error de test es especialmente relevante en los métodos wrapper. Al evaluar numerosos subconjuntos, la búsqueda puede encontrar combinaciones que se ajustan accidentalmente a las particiones de validación. Por ello, la precisión de test constituye una medida necesaria para evaluar la capacidad de generalización y no debe confundirse con el mejor valor encontrado durante la optimización.
+
+En Madelon aparecen diferencias más acusadas. NSGA-II obtiene una precisión media en test cercana al 0,896 y selecciona aproximadamente ocho variables. SFS obtiene un resultado similar, aunque está limitado por el presupuesto de evaluaciones y solo puede completar seis pasos. En cambio, las metaheurísticas monoobjetivo seleccionan subconjuntos mucho mayores y no consiguen superar claramente a la búsqueda aleatoria en precisión de test.
+
+Este comportamiento se relaciona con la función objetivo monoobjetivo utilizada. El peso asignado a la reducción del número de variables es pequeño, por lo que la mejora asociada a eliminar una característica puede quedar oculta por las variaciones del error de clasificación. En un conjunto de 500 variables, esta dificultad provoca que los algoritmos mantengan numerosas variables irrelevantes.
+
+NSGA-II evita parcialmente este problema al tratar el error de clasificación y el número de variables como objetivos independientes. La selección por dominancia y distancia de crowding permite conservar soluciones de diferentes tamaños y explorar compromisos entre precisión y simplicidad. El frente de Pareto de Madelon muestra que un subconjunto reducido puede conseguir un error considerablemente menor que el obtenido utilizando todas las variables.
+
+También deben considerarse las limitaciones del estudio. Se utilizan dos conjuntos de datos y un único clasificador principal, por lo que no es posible generalizar los resultados a cualquier problema de selección de características. Además, el presupuesto de evaluaciones limita la exploración, especialmente en Madelon. Los métodos clásicos como LASSO e información mutua realizan menos evaluaciones wrapper, por lo que sus costes no son directamente equivalentes a los de las metaheurísticas.
+
+En conjunto, los resultados sugieren que la formulación del problema es tan importante como el algoritmo de búsqueda. La optimización multiobjetivo resulta especialmente interesante cuando la reducción de dimensionalidad es un objetivo prioritario y no debe quedar subordinada a un peso fijo dentro de una función escalar.
 
 ## 10. Conclusiones y trabajo futuro  ·  Ambos
+# 10. Conclusiones y trabajo futuro
+
+El proyecto ha abordado la selección de características como un problema de optimización combinatoria y ha desarrollado cinco metaheurísticas para explorar el espacio de subconjuntos: GA, BPSO, SA, búsqueda tabú y NSGA-II.
+
+La comparación experimental muestra que el comportamiento de los métodos depende del conjunto de datos y de la formulación de la función objetivo. En Breast Cancer, los métodos de búsqueda obtienen buenos resultados de validación cruzada, pero las diferencias de generalización son pequeñas. En Madelon, NSGA-II destaca al encontrar subconjuntos reducidos que mantienen una precisión elevada, mientras que las versiones monoobjetivo tienen dificultades para eliminar suficientes variables irrelevantes.
+
+Una conclusión importante es que optimizar únicamente el error de clasificación no garantiza obtener subconjuntos pequeños. La reducción de dimensionalidad debe incorporarse de forma suficientemente efectiva en la formulación del problema. NSGA-II permite abordar directamente este compromiso mediante dos objetivos y proporciona un conjunto de soluciones no dominadas en lugar de una única solución.
+
+El estudio también pone de manifiesto el riesgo de sobreajuste durante la selección wrapper. Por este motivo, es fundamental mantener una partición de test independiente que no participe en la búsqueda y utilizarla únicamente para evaluar la generalización.
+
+Como líneas futuras se proponen:
+
+- Evaluar más conjuntos de datos y clasificadores para comprobar la robustez de los resultados.
+- Estudiar diferentes pesos de la función objetivo monoobjetivo y estrategias de inicialización adaptadas a problemas de alta dimensionalidad.
+- Incorporar métodos multiobjetivo adicionales para comparar sus frentes de Pareto.
+- Investigar estrategias de reducción del coste de evaluación, como modelos sustitutos o evaluaciones aproximadas.
+- Analizar mecanismos de selección que reduzcan el sobreajuste producido por búsquedas wrapper intensivas.
+- Realizar experimentos con presupuestos y tamaños de población diferentes para estudiar la relación entre coste computacional y calidad de las soluciones.
+
+En definitiva, el proyecto muestra que la selección de características requiere considerar conjuntamente la calidad predictiva, la dimensionalidad y la capacidad de generalización. La elección de la metaheurística y, especialmente, la formulación de sus objetivos condicionan los resultados obtenidos.
 
 ## 11. Uso de la IA  ·  Ambos
-A partir de `docs/registro_ia.md`.
+
+Durante el desarrollo del proyecto se utilizaron herramientas de inteligencia artificial como apoyo a la planificación, comprensión, programación, revisión y documentación.
+
+Las herramientas se emplearon para proponer una estructura inicial del repositorio, explicar conceptos relacionados con la optimización combinatoria y las metaheurísticas, sugerir implementaciones y ayudar a interpretar errores detectados durante las pruebas. También se utilizaron para mejorar la redacción de algunos apartados de la memoria y organizar la presentación de los resultados.
+
+La inteligencia artificial no se consideró una fuente de resultados experimentales. Las cifras presentadas en la memoria proceden de los archivos generados por los scripts de experimentación. Las propuestas de código y documentación fueron revisadas frente a la implementación del proyecto.
+
+Durante la revisión se identificaron errores lógicos que requirieron comprobación y corrección, como problemas en la gestión del presupuesto de evaluaciones y en la lógica de la búsqueda tabú. Esto pone de manifiesto que las respuestas generadas automáticamente pueden contener errores y deben verificarse mediante pruebas y análisis del código.
+
+El registro de las interacciones más relevantes, las herramientas utilizadas y los resultados obtenidos se recoge en el archivo `docs/registro_ia.md`.
 
 ## 12. Referencias y anexos
 # Referencias de Persona B (comprobadas: DOI o enlace)

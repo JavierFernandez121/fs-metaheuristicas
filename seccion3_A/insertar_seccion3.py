@@ -20,6 +20,23 @@ refs_total = (aqui / "referencias_A.md").read_text(encoding="utf-8").rstrip("\n"
 refs_cuerpo = [l for l in refs_total if not l.startswith("### Referencias (parte A)")]
 lineas = texto.split("\n")
 
+if "--quitar" in sys.argv:
+    def quitar_exacto(bloque, nombre):
+        n = len(bloque)
+        for i in range(len(lineas) - n + 1):
+            if lineas[i:i + n] == bloque:
+                del lineas[i:i + n]
+                print(f"Quitado el bloque '{nombre}' ({n} lineas, coincidencia exacta)")
+                return True
+        print(f"AVISO: no encuentro el bloque '{nombre}' tal cual (quiza lo editaste): no he tocado nada de el")
+        return False
+
+    quitar_exacto(sec3, "3.A estado del arte")
+    quitar_exacto(refs_total, "referencias de A")
+    memoria.write_text("\n".join(lineas), encoding="utf-8")
+    print("Hecho. Ahora haz commit, fusiona main y vuelve a ejecutar el script SIN --quitar.")
+    sys.exit(0)
+
 
 def buscar(patron):
     for i, l in enumerate(lineas):
